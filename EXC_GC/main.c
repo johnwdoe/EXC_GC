@@ -8,29 +8,16 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include "types.h"
+#include "processor.h"
 
 #define F_HDR_READING	(1)
 #define F_HDR_READY		(2)
 
-struct ParserContext
-{
-	float drill_deepness;
-	unsigned int drill_feed;
-	//unsigned int drill_feed_back;
-	float precision;
-	FILE *src_file;
-	FILE *dst_file;
 
-} ctx;
+struct ParserContext ctx;
 
-struct Point
-{
-	float x;
-	float y;
-	unsigned int tool_n;
-};
-
-uint8_t flag = 0;
+unsigned int flag = 0;
 char buf[100];
 unsigned int u_tmp;
 float tools[100], f_tmp, f_tmp2;
@@ -38,53 +25,33 @@ float tools[100], f_tmp, f_tmp2;
 
 int main(int argc, char* argv[])
 {
-	//default values
-	ctx.drill_deepness = 5;
-	ctx.drill_feed = 1200;
-	//ctx.drill_feed_back = 0;
-	ctx.precision = 1000;
-	int i;
+	printf("Initializing context...\n");
+	if (InitContext(&ctx, argc, argv) != 0) return 1;
 
-	printf("Parse input parameters...\n");
-	for(i=0; i<argc; i++)
-	{
-		if (strcmp(argv[i], "-i")==0){
-			printf("Input file = %s\n", argv[++i]);
-			ctx.src_file=fopen(argv[i], "r");
-		}
-		if (strcmp(argv[i],"-o")==0){
-			printf("Output file = %s\n", argv[++i]);
-			ctx.dst_file=fopen(argv[i], "w");
-		}
-		if (strcmp(argv[i],"-d")==0){
-			f_tmp = atof(argv[++i]);
-			printf("Override drill deepness = %f\n", f_tmp);
-			ctx.drill_deepness = f_tmp;
-		}
-		if (strcmp(argv[i],"-f")==0){
-			u_tmp = atoi(argv[++i]);
-			printf("Override drill feed = %u\n", u_tmp);
-			ctx.drill_feed = u_tmp;
-		}
-		if (strcmp(argv[i],"-u")==0){
-			u_tmp = atoi(argv[++i]);
-			printf("Override precision = %u\n", u_tmp);
-			ctx.precision = u_tmp;
-		}
-	}
-	if (ctx.src_file == NULL)
-	{
-		printf("Error opening input file.\n");
-		return 1;
-	}
+	printf("Context data:\nSouce file: %s\nDestination file: %s\n", ctx.src_fileName, ctx.dst_fileName);
+	printf("Drill deepness: %f\n", ctx.drill_deepness);
+	printf("Drill FeedForward/FeedBack: %u/%u\n", ctx.drill_feed, ctx.drill_feed_back);
+	printf("Units precision: %f\n\n", ctx.precision);
 
-	if (ctx.dst_file == NULL)
-	{
-		printf("Error opening output file.\n");
-		return 1;
-	}
+	printf("Start pre-processing...\n");
+	if (Preprocess(&ctx) != 0) return 1;
+	printf("Number of tools found: %u\nNumber of points found: %u\n\n", ctx.toolsCnt, ctx.pointsCnt);
 
-	//reading & parsing
+	printf("Start processing...\n");
+	if (Process(&ctx) != 0) return 1;
+	if (ctx.options & OPT_CTX_COMPLETED)
+	{
+		printf("Standard processing completion.\n");
+	} else{
+		printf("WARNING! Processing stopped at EOF!\n");
+	}
+	printf("Measuring mode: %s\n\n", (ctx.options&OPT_CTX_IMPERIAL) ? "IMPERIAL" : "METRIC");
+
+	printf("Start generating output file...\n");
+	if (GenerateFile(&ctx) != 0) return 1;
+
+	return 0;
+	//preprocessing
 	while(fgets(buf, 100, ctx.src_file) != NULL)
 	{
 		if (strcmp(buf, "%\n") == 0)
