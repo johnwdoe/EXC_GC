@@ -20,7 +20,8 @@ int InitContext(struct ParserContext* ctx, int argc, char* argv[])
 	ctx->options = 0;
 	ctx->drill_deepness = 5;
 	ctx->drill_feed = 1200;
-	ctx->drill_feed_back = 1200;
+	ctx->feed = 1200;
+	ctx->move_height = 2;
 	ctx->precision = 1000;
 
 	//Reading Context
@@ -39,20 +40,29 @@ int InitContext(struct ParserContext* ctx, int argc, char* argv[])
 			//printf("Override drill deepness = %f\n", f_tmp);
 			ctx->drill_deepness = f_tmp;
 		}
-		if (strcmp(argv[i],"-ff")==0){
+		if (strcmp(argv[i],"-df")==0){
 			u_tmp = atoi(argv[++i]);
 			//printf("Override drill feed = %u\n", u_tmp);
 			ctx->drill_feed = u_tmp;
 		}
-		if (strcmp(argv[i],"-fb")==0){
+		if (strcmp(argv[i],"-f")==0){
 			u_tmp = atoi(argv[++i]);
-			//printf("Override drill feed back = %u\n", u_tmp);
-			ctx->drill_feed_back = u_tmp;
+			//printf("Override drill moving feed = %u\n", u_tmp);
+			ctx->feed = u_tmp;
 		}
 		if (strcmp(argv[i],"-u")==0){
 			u_tmp = atoi(argv[++i]);
 			//printf("Override precision = %u\n", u_tmp);
 			ctx->precision = u_tmp;
+		}
+		if (strcmp(argv[i],"-h")==0){
+			f_tmp = atof(argv[++i]);
+			if (f_tmp<0)
+			{
+				fprintf(stderr, "Parameter -h can't be negative!\n");
+				return 1;
+			}
+			ctx->move_height = f_tmp;
 		}
 	}
 	return 0;
@@ -200,7 +210,9 @@ int GenerateFile(struct ParserContext* ctx)
 
 	fprintf(ctx->dst_file, "%s; set measuring mode\n", (ctx->options & OPT_CTX_IMPERIAL) ? "G20" : "G21");
 	fprintf(ctx->dst_file, "G90; set absolute positioning\n");
-	fprintf(ctx->dst_file, "G92 X0 Y0 Z0; reset coordinate to zero\n");
+	fprintf(ctx->dst_file, "G92 X0 Y0 Z-%f; reset coordinate to zero\n", ctx->move_height);
+
+	fprintf(ctx->dst_file, "G01 X0 Y0 Z0 F%u\n", ctx->feed);
 
 	//find min/max
 	x_min = ctx->points[0].x;
@@ -216,25 +228,39 @@ int GenerateFile(struct ParserContext* ctx)
 	}
 
 	//move across dimensions
-	fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", x_min, y_min, ctx->drill_feed);
-	fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", x_min, y_max, ctx->drill_feed);
-	fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", x_max, y_max, ctx->drill_feed);
-	fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", x_max, y_min, ctx->drill_feed);
-	fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", x_min, y_min, ctx->drill_feed);
-	fprintf(ctx->dst_file, "G01 X0 Y0 F%u\n", ctx->drill_feed);
+	fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", x_min, y_min, ctx->feed);
+	fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", x_min, y_max, ctx->feed);
+	fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", x_max, y_max, ctx->feed);
+	fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", x_max, y_min, ctx->feed);
+	fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", x_min, y_min, ctx->feed);
+	fprintf(ctx->dst_file, "G01 X0 Y0 F%u\n", ctx->feed);
 
 	for (i=0; i < ctx->pointsCnt; i++)
 	{
+		//move XY
+		fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", ctx->points[i].x, ctx->points[i].y, ctx->feed);
+		//do it when tool is new
 		if (ctx->points[i].tool_n != cTool)
 		{
-			cTool = ctx->points[0].tool_n;
-			fprintf(ctx->dst_file, "M117 T%u, D%f\n", cTool+1, ctx->tools[cTool]);
+			cTool = ctx->points[i].tool_n;
+			//move tool up
+			fprintf(ctx->dst_file, "G01 Z50 F%u\n", ctx->feed);
+			//wait
+			fprintf(ctx->dst_file, "M0 Ch. T%u, D%f\n", cTool+1, ctx->tools[cTool]);
+			//move tool down to -mive_height
+			fprintf(ctx->dst_file, "G01 Z-%f F%u\n", ctx->move_height, ctx->feed);
+			//wait for fix tool
+			fprintf(ctx->dst_file, "M0 Fix tool!\n");
+			//move to zero Z position
+			fprintf(ctx->dst_file, "G01 Z0 F%u\n", ctx->feed);
+			//wait for spindle on
+			fprintf(ctx->dst_file, "M0 Turn on spindle!\n");
 		}
-		fprintf(ctx->dst_file, "G01 X%f Y%f F%u\n", ctx->points[i].x, ctx->points[i].y, ctx->drill_feed);
+
 		fprintf(ctx->dst_file, "G01 Z%f F%u\n", -ctx->drill_deepness, ctx->drill_feed);
-		fprintf(ctx->dst_file, "G01 Z0 F%u\n", ctx->drill_feed_back);
+		fprintf(ctx->dst_file, "G01 Z0 F%u\n", ctx->feed);
 	}
-	fprintf(ctx->dst_file, "M107 ; fan off\nG01 Z100 F%u\nG28 X Y ; home XY\n", ctx->drill_feed_back);
+	fprintf(ctx->dst_file, "M107 ; fan off\nG01 Z50 F%u\nG01 X0 Y0 ; home XY\n", ctx->feed);
 
 	fclose(ctx->dst_file);
 

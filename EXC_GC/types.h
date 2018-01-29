@@ -25,7 +25,8 @@ struct ParserContext
 	unsigned int options;
 	float drill_deepness;
 	unsigned int drill_feed;
-	unsigned int drill_feed_back;
+	unsigned int feed;
+	float move_height;
 	float precision;
 	char *src_fileName;
 	FILE *src_file;
