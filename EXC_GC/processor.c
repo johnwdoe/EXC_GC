@@ -27,6 +27,20 @@ int InitContext(struct ParserContext* ctx, int argc, char* argv[])
 	//Reading Context
 	for(i=0; i<argc; i++)
 	{
+		if (strcmp(argv[i], "--help") == 0)
+		{
+			printf("Usage: EXC_GC <options>\n\nOptions:\n");
+			printf("  --help		Show this text\n");
+			printf("  -i <filename>		Input excellon file\n");
+			printf("  -o <filename>		Output G-Code file\n");
+			printf("  -d <value>		Drill deepness\n");
+			printf("  -df <value>		Drill feed\n");
+			printf("  -f <value>		XY-moving feed\n");
+			printf("  -u <value>		precision\n");
+			printf("  -h <value>		XY-moving height\n");
+			return 1;
+		}
+
 		if (strcmp(argv[i], "-i")==0){
 			//printf("Input file = %s\n", argv[++i]);
 			ctx->src_fileName = argv[++i];
