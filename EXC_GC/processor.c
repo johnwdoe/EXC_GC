@@ -224,9 +224,9 @@ int GenerateFile(struct ParserContext* ctx)
 
 	fprintf(ctx->dst_file, "%s; set measuring mode\n", (ctx->options & OPT_CTX_IMPERIAL) ? "G20" : "G21");
 	fprintf(ctx->dst_file, "G90; set absolute positioning\n");
-	fprintf(ctx->dst_file, "G92 X0 Y0 Z-%f; reset coordinate to zero\n", ctx->move_height);
+	fprintf(ctx->dst_file, "G92 X0 Y0 Z0; reset coordinate to zero\n");
 
-	fprintf(ctx->dst_file, "G01 X0 Y0 Z0 F%u\n", ctx->feed);
+	fprintf(ctx->dst_file, "G01 X0 Y0 Z%f F%u\n", (15 + ctx->move_height), ctx->feed); //lift drill
 
 	//find min/max
 	x_min = ctx->points[0].x;
@@ -261,18 +261,18 @@ int GenerateFile(struct ParserContext* ctx)
 			fprintf(ctx->dst_file, "G01 Z50 F%u\n", ctx->feed);
 			//wait
 			fprintf(ctx->dst_file, "M0 Ch. T%u, D%f\n", cTool+1, ctx->tools[cTool]);
-			//move tool down to -mive_height
-			fprintf(ctx->dst_file, "G01 Z-%f F%u\n", ctx->move_height, ctx->feed);
+			//move tool down to plate
+			fprintf(ctx->dst_file, "G01 Z%f F%u\n", 15.0, ctx->feed);
 			//wait for fix tool
 			fprintf(ctx->dst_file, "M0 Fix tool!\n");
-			//move to zero Z position
-			fprintf(ctx->dst_file, "G01 Z0 F%u\n", ctx->feed);
+			//lift Z to h
+			fprintf(ctx->dst_file, "G01 Z%f F%u\n", (15 + ctx->move_height), ctx->feed);
 			//wait for spindle on
 			fprintf(ctx->dst_file, "M0 Turn on spindle!\n");
 		}
 
-		fprintf(ctx->dst_file, "G01 Z%f F%u\n", -ctx->drill_deepness, ctx->drill_feed);
-		fprintf(ctx->dst_file, "G01 Z0 F%u\n", ctx->feed);
+		fprintf(ctx->dst_file, "G01 Z%f F%u\n", (15 - ctx->drill_deepness), ctx->drill_feed); //drilling
+		fprintf(ctx->dst_file, "G01 Z%f F%u\n", (15 + ctx->move_height), ctx->feed); //lift up
 	}
 	fprintf(ctx->dst_file, "M107 ; fan off\nG01 Z50 F%u\nG01 X0 Y0 ; home XY\n", ctx->feed);
 
